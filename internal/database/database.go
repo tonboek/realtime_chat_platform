@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"os"
 
 	"realtime_chat_platform/internal/models"
 
@@ -13,7 +14,13 @@ var DB *gorm.DB
 
 func InitDB() {
 	var err error
-	DB, err = gorm.Open(sqlite.Open("chat.db"), &gorm.Config{})
+	// Use environment variable or default path
+	dbPath := "chat.db"
+	if os.Getenv("DB_PATH") != "" {
+		dbPath = os.Getenv("DB_PATH")
+	}
+
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
