@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"realtime_chat_platform/internal/config"
 	"realtime_chat_platform/internal/database"
 	"realtime_chat_platform/internal/models"
 
@@ -12,8 +13,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var jwtSecret = []byte("your-secret-key") // In production, use environment variable
 
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -99,7 +98,7 @@ func LoginHandler(c *gin.Context) {
 		"exp":      time.Now().Add(time.Hour * 24).Unix(), // 24 hours
 	})
 
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString([]byte(config.JWTSecret))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -114,6 +113,6 @@ func LoginHandler(c *gin.Context) {
 
 func ValidateToken(tokenString string) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
+		return []byte(config.JWTSecret), nil
 	})
 }

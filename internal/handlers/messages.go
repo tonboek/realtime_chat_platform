@@ -33,9 +33,50 @@ func GetMessageHistory(c *gin.Context) {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
+	// Create response with user information
+	type MessageWithUser struct {
+		ID        uint   `json:"id"`
+		Username  string `json:"username"`
+		Content   string `json:"content"`
+		CreatedAt string `json:"created_at"`
+		Nickname  string `json:"nickname"`
+		Avatar    string `json:"avatar"`
+	}
+
+	var messagesWithUser []MessageWithUser
+	for _, msg := range messages {
+		// Get user information
+		var user models.User
+		if err := database.DB.Where("username = ?", msg.Username).First(&user).Error; err == nil {
+			displayName := user.Username
+			if user.Nickname != "" {
+				displayName = user.Nickname
+			}
+
+			messagesWithUser = append(messagesWithUser, MessageWithUser{
+				ID:        msg.ID,
+				Username:  displayName,
+				Content:   msg.Content,
+				CreatedAt: msg.CreatedAt.Format("2006-01-02 15:04:05"),
+				Nickname:  user.Nickname,
+				Avatar:    user.Avatar,
+			})
+		} else {
+			// Fallback if user not found
+			messagesWithUser = append(messagesWithUser, MessageWithUser{
+				ID:        msg.ID,
+				Username:  msg.Username,
+				Content:   msg.Content,
+				CreatedAt: msg.CreatedAt.Format("2006-01-02 15:04:05"),
+				Nickname:  "",
+				Avatar:    "",
+			})
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"messages": messages,
-		"count":    len(messages),
+		"messages": messagesWithUser,
+		"count":    len(messagesWithUser),
 	})
 }
 

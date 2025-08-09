@@ -10,6 +10,7 @@ const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const logoutBtn = document.getElementById('logoutBtn');
+const profileBtn = document.getElementById('profileBtn');
 const onlineUsersContainer = document.getElementById('onlineUsers');
 const onlineCountSpan = document.getElementById('onlineCount');
 const typingIndicator = document.getElementById('typing-indicator');
@@ -25,6 +26,19 @@ messageInput.addEventListener('keypress', (e) => {
 });
 messageInput.addEventListener('input', handleTyping);
 logoutBtn.addEventListener('click', handleLogout);
+profileBtn.addEventListener('click', goToProfile);
+
+// Check if user is already logged in
+document.addEventListener('DOMContentLoaded', function() {
+    const savedToken = localStorage.getItem('authToken');
+    const savedUsername = localStorage.getItem('username');
+    
+    if (savedToken && savedUsername) {
+        currentUser = savedUsername;
+        showChatInterface();
+        connectWebSocket();
+    }
+});
 
 async function handleLogin(e) {
     e.preventDefault();
@@ -44,10 +58,13 @@ async function handleLogin(e) {
         
         if (response.ok) {
             currentUser = username;
+            // Save token and username to localStorage
+            localStorage.setItem('authToken', data.token);
+            localStorage.setItem('username', data.username);
             showChatInterface();
             connectWebSocket();
         } else {
-            alert('Login failed: ' + data.message);
+            alert('Login failed: ' + data.error);
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -76,7 +93,7 @@ async function handleRegister(e) {
             // Switch to login tab
             document.getElementById('login-tab').click();
         } else {
-            alert('Registration failed: ' + data.message);
+            alert('Registration failed: ' + data.error);
         }
     } catch (error) {
         console.error('Registration error:', error);
@@ -106,7 +123,7 @@ async function loadMessageHistory() {
             
             // Add historical messages
             data.messages.forEach(msg => {
-                addMessage(msg.username, msg.content, new Date(msg.created_at));
+                addMessage(msg.username, msg.content, msg.created_at, msg.avatar);
             });
             
             console.log(`Loaded ${data.count} messages from history`);
@@ -118,7 +135,8 @@ async function loadMessageHistory() {
 
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    const token = localStorage.getItem('authToken');
+    const wsUrl = `${protocol}//${window.location.host}/api/ws?token=${encodeURIComponent(token)}`;
     
     ws = new WebSocket(wsUrl);
 
@@ -140,7 +158,7 @@ function connectWebSocket() {
                 handleTypingEvent(data);
             } else {
                 // Regular message
-                addMessage(data.username, data.content, new Date(data.timestamp));
+                addMessage(data.username, data.content, data.timestamp, data.avatar);
             }
         } catch (error) {
             console.error('Error parsing message:', error);
@@ -174,13 +192,44 @@ function sendMessage() {
     messageInput.value = '';
 }
 
-function addMessage(username, message, timestamp) {
+function addMessage(username, message, timestamp, avatar = null) {
     const messageElement = document.createElement('div');
     messageElement.className = 'message';
     
+    // Format timestamp
+    let timeDisplay = '';
+    if (typeof timestamp === 'string') {
+        // If timestamp is a string (from WebSocket), parse it
+        const date = new Date(timestamp);
+        timeDisplay = date.toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } else {
+        // If timestamp is a Date object (from history)
+        timeDisplay = timestamp.toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    // Default avatar if none provided
+    const avatarUrl = avatar || '/static/images/default-avatar.svg';
+    
     messageElement.innerHTML = `
-        <div class="username">${username}</div>
-        <div class="timestamp">${timestamp.toLocaleTimeString()}</div>
+        <div class="message-header">
+            <img src="${avatarUrl}" alt="Avatar" class="user-avatar" onerror="this.src='/static/images/default-avatar.svg'">
+            <div class="message-info">
+                <div class="username">${username}</div>
+                <div class="timestamp">${timeDisplay}</div>
+            </div>
+        </div>
         <div class="content">${message}</div>
     `;
 
@@ -206,16 +255,23 @@ function updateOnlineUsersList(users) {
     onlineCountSpan.textContent = users.length;
     
     if (users.length === 0) {
-        onlineUsersContainer.innerHTML = '<div class="text-muted">No users online</div>';
+        onlineUsersContainer.innerHTML = '<div class="text-muted">Нет пользователей онлайн</div>';
         return;
     }
     
-    users.forEach(username => {
+    users.forEach(user => {
         const userElement = document.createElement('div');
         userElement.className = 'online-user';
+        
+        // Default avatar if none provided
+        const avatarUrl = user.avatar || '/static/images/default-avatar.svg';
+        
         userElement.innerHTML = `
-            <span class="status-indicator"></span>
-            ${username}
+            <div class="online-user-info">
+                <img src="${avatarUrl}" alt="Avatar" class="online-user-avatar" onerror="this.src='/static/images/default-avatar.svg'">
+                <span class="status-indicator"></span>
+                <span class="online-username">${user.username}</span>
+            </div>
         `;
         onlineUsersContainer.appendChild(userElement);
     });
@@ -289,6 +345,9 @@ function handleLogout() {
     if (ws) {
         ws.close();
     }
+    // Clear localStorage
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('username');
     showAuthForms();
     messagesContainer.innerHTML = '';
     messageInput.value = '';
@@ -299,4 +358,8 @@ function handleLogout() {
         clearTimeout(typingTimeout);
     }
     isTyping = false;
+}
+
+function goToProfile() {
+    window.location.href = '/profile';
 } 

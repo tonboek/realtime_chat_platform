@@ -6,6 +6,7 @@ import (
 
 	"realtime_chat_platform/internal/database"
 	"realtime_chat_platform/internal/handlers"
+	"realtime_chat_platform/internal/middleware"
 	"realtime_chat_platform/internal/websocket"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,12 @@ func main() {
 		})
 	})
 
+	r.GET("/profile", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "profile.html", gin.H{
+			"title": "Профиль пользователя",
+		})
+	})
+
 	// API routes
 	api := r.Group("/api")
 	{
@@ -41,6 +48,19 @@ func main() {
 		api.GET("/ws", func(c *gin.Context) {
 			websocket.WebSocketHandler(c.Writer, c.Request)
 		})
+
+		// Profile routes (protected by authentication)
+		profile := api.Group("/profile")
+		profile.Use(middleware.AuthMiddleware())
+		{
+			profile.GET("/", handlers.GetProfileHandler)
+			profile.PUT("/", handlers.UpdateProfileHandler)
+			profile.PUT("/password", handlers.ChangePasswordHandler)
+			profile.POST("/avatar", handlers.UploadAvatarHandler)
+		}
+
+		// Public user profile route
+		api.GET("/users/:username/profile", handlers.GetUserProfileHandler)
 	}
 
 	log.Println("Server starting on :8080")

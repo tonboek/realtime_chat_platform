@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"realtime_chat_platform/internal/config"
 	"realtime_chat_platform/internal/database"
 	"realtime_chat_platform/internal/models"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for development
+		return true
 	},
 }
 
@@ -32,9 +35,9 @@ type Hub struct {
 	broadcast   chan []byte
 	register    chan *Client
 	unregister  chan *Client
-	typing      chan []byte // Channel for typing events
+	typing      chan []byte
 	mutex       sync.RWMutex
-	typingUsers map[string]bool // Track who's currently typing
+	typingUsers map[string]bool
 	typingMutex sync.RWMutex
 }
 
@@ -42,12 +45,13 @@ type Message struct {
 	Username  string `json:"username"`
 	Content   string `json:"content"`
 	Timestamp string `json:"timestamp"`
+	Avatar    string `json:"avatar"`
 }
 
 type TypingEvent struct {
 	Username string `json:"username"`
 	IsTyping bool   `json:"is_typing"`
-	Type     string `json:"type"` // "typing_start" or "typing_stop"
+	Type     string `json:"type"`
 }
 
 var GlobalHub = NewHub()
@@ -66,7 +70,6 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) Run() {
-	//nolint:staticcheck,SA1012 // This is the correct pattern for WebSocket hub event loop
 	for {
 		select {
 		case client := <-h.register:
@@ -111,19 +114,38 @@ func (h *Hub) Run() {
 	}
 }
 
-// GetOnlineUsers returns a list of usernames of currently connected users
-func (h *Hub) GetOnlineUsers() []string {
+type OnlineUser struct {
+	Username string `json:"username"`
+	Avatar   string `json:"avatar"`
+}
+
+// GetOnlineUsers returns a list of online users with their display information
+func (h *Hub) GetOnlineUsers() []OnlineUser {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
-	users := make([]string, 0, len(h.clients))
+	users := make([]OnlineUser, 0, len(h.clients))
 	for client := range h.clients {
-		users = append(users, client.Username)
+		var user models.User
+		if err := database.DB.Where("username = ?", client.Username).First(&user).Error; err == nil {
+			displayName := user.Username
+			if user.Nickname != "" {
+				displayName = user.Nickname
+			}
+			users = append(users, OnlineUser{
+				Username: displayName,
+				Avatar:   user.Avatar,
+			})
+		} else {
+			users = append(users, OnlineUser{
+				Username: client.Username,
+				Avatar:   "",
+			})
+		}
 	}
 	return users
 }
 
-// GetTypingUsers returns a list of usernames who are currently typing
 func (h *Hub) GetTypingUsers() []string {
 	h.typingMutex.RLock()
 	defer h.typingMutex.RUnlock()
@@ -162,27 +184,35 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// Try to parse as typing event first
 		var typingEvent TypingEvent
 		if err := json.Unmarshal(message, &typingEvent); err == nil && (typingEvent.Type == "typing_start" || typingEvent.Type == "typing_stop") {
-			// Handle typing event
 			c.Hub.SetUserTyping(typingEvent.Username, typingEvent.IsTyping)
 			c.Hub.typing <- message
 			continue
 		}
 
-		// Parse as regular message
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Printf("Error parsing message: %v", err)
 			continue
 		}
-		if msg.Content == "" { // Check for empty content
+		if msg.Content == "" {
 			log.Printf("Empty message content, skipping save.")
 			continue
 		}
 
-		// Stop typing when message is sent
+		var user models.User
+		if err := database.DB.Where("username = ?", msg.Username).First(&user).Error; err == nil {
+			displayName := user.Username
+			if user.Nickname != "" {
+				displayName = user.Nickname
+			}
+			msg.Username = displayName
+			msg.Avatar = user.Avatar
+		}
+
+		msg.Timestamp = time.Now().Format("2006-01-02 15:04:05")
+
 		c.Hub.SetUserTyping(msg.Username, false)
 		stopTypingEvent := TypingEvent{
 			Username: msg.Username,
@@ -193,22 +223,21 @@ func (c *Client) ReadPump() {
 			c.Hub.typing <- stopTypingData
 		}
 
-		// Store message in database
 		dbMessage := models.Message{
-			Username: msg.Username,
+			Username: c.Username,
 			Content:  msg.Content,
 		}
 		if err := database.DB.Create(&dbMessage).Error; err != nil {
 			log.Printf("Error saving message to database: %v", err)
 		}
 
-		// Update user's last active time without updating updated_at
-		if err := database.DB.Model(&models.User{}).Where("username = ?", msg.Username).UpdateColumn("last_active", time.Now()).Error; err != nil {
+		if err := database.DB.Model(&models.User{}).Where("username = ?", c.Username).UpdateColumn("last_active", time.Now()).Error; err != nil {
 			log.Printf("Error updating user last active time: %v", err)
 		}
 
-		// Broadcast to all clients
-		c.Hub.broadcast <- message
+		if broadcastData, err := json.Marshal(msg); err == nil {
+			c.Hub.broadcast <- broadcastData
+		}
 	}
 }
 
@@ -239,17 +268,46 @@ func (c *Client) WritePump() {
 }
 
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract JWT token from query parameter or header
+	tokenString := r.URL.Query().Get("token")
+	if tokenString == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+
+	var username string
+
+	if tokenString != "" {
+		// Parse and validate JWT token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return []byte(config.JWTSecret), nil
+		})
+
+		if err == nil && token.Valid {
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if usernameClaim, ok := claims["username"].(string); ok {
+					username = usernameClaim
+				}
+			}
+		}
+	}
+
+	// If no valid token, use Anonymous
+	if username == "" {
+		username = "Anonymous"
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Error upgrading connection: %v", err)
 		return
 	}
 
-	// For now, we'll use a simple client ID
-	// In a real app, you'd extract user info from JWT token
 	client := &Client{
 		ID:       "client-" + conn.RemoteAddr().String(),
-		Username: "Anonymous", // This should come from JWT token
+		Username: username,
 		Conn:     conn,
 		Hub:      GlobalHub,
 		Send:     make(chan []byte, 256),
