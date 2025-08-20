@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UploadAvatarHandler handles avatar file upload
+// загружает аватар пользователя
 func UploadAvatarHandler(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -23,49 +23,48 @@ func UploadAvatarHandler(c *gin.Context) {
 		return
 	}
 
-	// Get the uploaded file
+	// получение загруженного файла
 	file, err := c.FormFile("avatar")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
 		return
 	}
 
-	// Validate file type
+	// проверка типа файла
 	if !isValidImageType(file) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Only JPG, PNG, and GIF are allowed"})
 		return
 	}
 
-	// Validate file size (max 5MB)
+	// проверка размера файла
 	if file.Size > 5*1024*1024 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum size is 5MB"})
 		return
 	}
 
-	// Generate unique filename
+	// генерация уникального имени файла
 	ext := filepath.Ext(file.Filename)
 	filename := fmt.Sprintf("avatar_%d_%d%s", userID, time.Now().Unix(), ext)
 
-	// Create uploads directory if it doesn't exist
+	// создание директории для загрузки
 	uploadDir := "web/static/uploads/avatars"
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}
 
-	// Save file
+	// сохранение файла
 	filepath := filepath.Join(uploadDir, filename)
 	if err := c.SaveUploadedFile(file, filepath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
 	}
 
-	// Update user's avatar URL in database
+	// обновление URL аватара в БД
 	avatarURL := fmt.Sprintf("/static/uploads/avatars/%s", filename)
 	fmt.Printf("Updating avatar URL for user %d: %s\n", userID, avatarURL)
 
 	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).UpdateColumn("avatar", avatarURL).Error; err != nil {
-		// If database update fails, delete the uploaded file
 		os.Remove(filepath)
 		fmt.Printf("Failed to update avatar in database: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
@@ -74,7 +73,7 @@ func UploadAvatarHandler(c *gin.Context) {
 
 	fmt.Printf("Successfully updated avatar in database\n")
 
-	// Get updated user profile
+	// получение обновленного профиля пользователя
 	var user models.User
 	if err := database.DB.First(&user, userID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get updated profile"})
@@ -96,7 +95,7 @@ func UploadAvatarHandler(c *gin.Context) {
 	})
 }
 
-// isValidImageType checks if the uploaded file is a valid image
+// проверяет, является ли загруженный файл изображением
 func isValidImageType(file *multipart.FileHeader) bool {
 	contentType := file.Header.Get("Content-Type")
 	validTypes := []string{
@@ -113,7 +112,7 @@ func isValidImageType(file *multipart.FileHeader) bool {
 		}
 	}
 
-	// Also check file extension as fallback
+	// проверка расширения файла как резервного
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	validExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
 

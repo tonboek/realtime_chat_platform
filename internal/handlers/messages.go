@@ -11,29 +11,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetMessageHistory retrieves recent messages from the database
+// получает последние сообщения из БД
 func GetMessageHistory(c *gin.Context) {
-	// Get limit parameter (default 50 messages)
 	limitStr := c.DefaultQuery("limit", "50")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 || limit > 100 {
-		limit = 50 // Default to 50 if invalid
+		limit = 50
 	}
 
 	var messages []models.Message
 
-	// Get recent messages ordered by creation time (newest first)
 	if err := database.DB.Order("created_at desc").Limit(limit).Find(&messages).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve messages"})
 		return
 	}
 
-	// Reverse the order to show oldest first in chat
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
-	// Create response with user information
 	type MessageWithUser struct {
 		ID        uint   `json:"id"`
 		Username  string `json:"username"`
@@ -45,7 +41,6 @@ func GetMessageHistory(c *gin.Context) {
 
 	var messagesWithUser []MessageWithUser
 	for _, msg := range messages {
-		// Get user information
 		var user models.User
 		if err := database.DB.Where("username = ?", msg.Username).First(&user).Error; err == nil {
 			displayName := user.Username
@@ -62,7 +57,6 @@ func GetMessageHistory(c *gin.Context) {
 				Avatar:    user.Avatar,
 			})
 		} else {
-			// Fallback if user not found
 			messagesWithUser = append(messagesWithUser, MessageWithUser{
 				ID:        msg.ID,
 				Username:  msg.Username,
@@ -80,7 +74,7 @@ func GetMessageHistory(c *gin.Context) {
 	})
 }
 
-// GetOnlineUsers returns the list of currently connected users
+// возвращает список текущих подключенных пользователей
 func GetOnlineUsers(c *gin.Context) {
 	onlineUsers := websocket.GlobalHub.GetOnlineUsers()
 

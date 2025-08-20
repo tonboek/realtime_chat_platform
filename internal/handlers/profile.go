@@ -10,21 +10,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// GetProfileHandler returns the current user's profile
+// возвращает профиль текущего пользователя
 func GetProfileHandler(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	uid := c.GetInt("user_id")
+	if uid == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	var user models.User
-	if err := database.DB.First(&user, userID).Error; err != nil {
+	if err := database.DB.First(&user, uid).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	fmt.Printf("Loading profile for user %d: avatar=%s\n", userID, user.Avatar)
+	fmt.Printf("Loading profile for user %d: avatar=%s\n", uid, user.Avatar)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":          user.ID,
@@ -37,10 +37,10 @@ func GetProfileHandler(c *gin.Context) {
 	})
 }
 
-// UpdateProfileHandler updates user profile information
+// обновляет информацию о профиле пользователя
 func UpdateProfileHandler(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	uid := c.GetInt("user_id")
+	if uid == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -57,12 +57,12 @@ func UpdateProfileHandler(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := database.DB.First(&user, userID).Error; err != nil {
+	if err := database.DB.First(&user, uid).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Update fields
+	// обновление полей
 	updates := make(map[string]interface{})
 	if request.Nickname != "" {
 		updates["nickname"] = request.Nickname
@@ -93,10 +93,10 @@ func UpdateProfileHandler(c *gin.Context) {
 	})
 }
 
-// ChangePasswordHandler allows users to change their password
+// позволяет пользователям изменять свой пароль
 func ChangePasswordHandler(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	uid := c.GetInt("user_id")
+	if uid == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -112,25 +112,22 @@ func ChangePasswordHandler(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := database.DB.First(&user, userID).Error; err != nil {
+	if err := database.DB.First(&user, uid).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.CurrentPassword)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Current password is incorrect"})
 		return
 	}
 
-	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
-	// Update password
 	if err := database.DB.Model(&user).Update("password", string(hashedPassword)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
 		return
@@ -139,7 +136,7 @@ func ChangePasswordHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
 }
 
-// GetUserProfileHandler returns a specific user's public profile
+// возвращает публичный профиль конкретного пользователя
 func GetUserProfileHandler(c *gin.Context) {
 	username := c.Param("username")
 	if username == "" {

@@ -13,19 +13,19 @@ import (
 )
 
 func main() {
-	// Initialize database
+	// инициализация базы данных
 	database.InitDB()
 
-	// Start WebSocket hub
+	// запуск WebSocket хаба
 	go websocket.GlobalHub.Run()
 
 	r := gin.Default()
 
-	// Serve static files
+	// сервер статических файлов
 	r.Static("/static", "./web/static")
 	r.LoadHTMLGlob("web/templates/*")
 
-	// Routes
+	// маршруты
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"title": "Realtime Chat Platform",
@@ -38,7 +38,7 @@ func main() {
 		})
 	})
 
-	// API routes
+	// маршруты API
 	api := r.Group("/api")
 	{
 		api.POST("/register", handlers.RegisterHandler)
@@ -49,7 +49,7 @@ func main() {
 			websocket.WebSocketHandler(c.Writer, c.Request)
 		})
 
-		// Profile routes (protected by authentication)
+		// маршруты профиля
 		profile := api.Group("/profile")
 		profile.Use(middleware.AuthMiddleware())
 		{
@@ -59,7 +59,7 @@ func main() {
 			profile.POST("/avatar", handlers.UploadAvatarHandler)
 		}
 
-		// Public user profile route
+		// маршрут публичного профиля пользователя
 		api.GET("/users/:username/profile", handlers.GetUserProfileHandler)
 	}
 

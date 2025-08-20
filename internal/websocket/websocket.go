@@ -119,7 +119,7 @@ type OnlineUser struct {
 	Avatar   string `json:"avatar"`
 }
 
-// GetOnlineUsers returns a list of online users with their display information
+// возвращает список онлайн пользователей с их отображаемой информацией
 func (h *Hub) GetOnlineUsers() []OnlineUser {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
@@ -159,7 +159,7 @@ func (h *Hub) GetTypingUsers() []string {
 	return users
 }
 
-// SetUserTyping updates the typing status of a user
+// обновляет статус печати пользователя
 func (h *Hub) SetUserTyping(username string, isTyping bool) {
 	h.typingMutex.Lock()
 	defer h.typingMutex.Unlock()
@@ -268,7 +268,7 @@ func (c *Client) WritePump() {
 }
 
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract JWT token from query parameter or header
+	// извлечение JWT токена из параметра запроса или заголовка
 	tokenString := r.URL.Query().Get("token")
 	if tokenString == "" {
 		authHeader := r.Header.Get("Authorization")
@@ -280,7 +280,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	var username string
 
 	if tokenString != "" {
-		// Parse and validate JWT token
+		// парсинг и проверка JWT токена
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(config.JWTSecret), nil
 		})
@@ -294,7 +294,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// If no valid token, use Anonymous
+	// если нет валидного токена, используется анонимный пользователь
 	if username == "" {
 		username = "Anonymous"
 	}

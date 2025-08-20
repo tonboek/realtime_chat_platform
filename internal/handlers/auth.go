@@ -37,21 +37,21 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists
+	// проверка на существование пользователя
 	var existingUser models.User
 	if err := database.DB.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
 		return
 	}
 
-	// Hash password
+	// хеширование пароля
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
-	// Create user
+	// создание пользователя
 	user := models.User{
 		Username:   req.Username,
 		Password:   string(hashedPassword),
@@ -73,29 +73,28 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Find user
+	// поиск пользователя
 	var user models.User
 	if err := database.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Check password
+	// проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Update last active time on login without updating updated_at
+	// обновление времени последней активности при входе без обновления updated_at
 	if err := database.DB.Model(&user).UpdateColumn("last_active", time.Now()).Error; err != nil {
 		log.Printf("Error updating user last active time on login: %v", err)
 	}
 
-	// Generate JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":  user.ID,
 		"username": user.Username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(), // 24 hours
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(config.JWTSecret))

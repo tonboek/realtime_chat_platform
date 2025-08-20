@@ -12,7 +12,7 @@
 - **Индикаторы печати** - Статус печати в реальном времени
 - **Адаптивный интерфейс** - Чистый интерфейс с использованием Bootstrap
 
-## Быстрый старт
+## Старт
 
 ### Требования
 - Go 1.19+
@@ -44,10 +44,12 @@
 realtime_chat_platform/
 ├── cmd/main.go              # Точка входа приложения
 ├── internal/
+|   ├── config/constants.go
 │   ├── database/database.go # Настройка базы данных
 │   ├── handlers/            # HTTP обработчики
+|   ├── middleware/auth.go
 │   ├── models/user.go       # Модели данных
-│   └── websocket/           # WebSocket логика
+│   └── websocket/websocket.go  # WebSocket логика
 ├── web/
 │   ├── static/              # CSS и JavaScript
 │   └── templates/           # HTML шаблоны

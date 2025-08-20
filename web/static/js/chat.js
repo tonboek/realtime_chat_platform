@@ -220,11 +220,11 @@ function addMessage(username, message, timestamp, avatar = null) {
     }
     
     // Default avatar if none provided
-    const avatarUrl = avatar || '/static/images/default-avatar.svg';
+    const avatarUrl = avatar || '/static/images/default_avatar.svg';
     
     messageElement.innerHTML = `
         <div class="message-header">
-            <img src="${avatarUrl}" alt="Avatar" class="user-avatar" onerror="this.src='/static/images/default-avatar.svg'">
+            <img src="${avatarUrl}" alt="Avatar" class="user-avatar" onerror="this.src='/static/images/default_avatar.svg'">
             <div class="message-info">
                 <div class="username">${username}</div>
                 <div class="timestamp">${timeDisplay}</div>
@@ -264,11 +264,11 @@ function updateOnlineUsersList(users) {
         userElement.className = 'online-user';
         
         // Default avatar if none provided
-        const avatarUrl = user.avatar || '/static/images/default-avatar.svg';
+        const avatarUrl = user.avatar || '/static/images/default_avatar.svg';
         
         userElement.innerHTML = `
             <div class="online-user-info">
-                <img src="${avatarUrl}" alt="Avatar" class="online-user-avatar" onerror="this.src='/static/images/default-avatar.svg'">
+                <img src="${avatarUrl}" alt="Avatar" class="online-user-avatar" onerror="this.src='/static/images/default_avatar.svg'">
                 <span class="status-indicator"></span>
                 <span class="online-username">${user.username}</span>
             </div>

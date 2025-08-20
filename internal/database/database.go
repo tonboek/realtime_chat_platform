@@ -14,7 +14,7 @@ var DB *gorm.DB
 
 func InitDB() {
 	var err error
-	// Use environment variable or default path
+
 	dbPath := "chat.db"
 	if os.Getenv("DB_PATH") != "" {
 		dbPath = os.Getenv("DB_PATH")
@@ -25,7 +25,6 @@ func InitDB() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Auto migrate the schema
 	err = DB.AutoMigrate(&models.User{}, &models.Message{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)

@@ -75,7 +75,7 @@ function updateAvatarPreview(avatarUrl = null) {
     if (avatarUrl) {
         avatarImg.src = avatarUrl;
     } else {
-        avatarImg.src = '/static/images/default-avatar.svg';
+        avatarImg.src = '/static/images/default_avatar.svg';
     }
 }
 
